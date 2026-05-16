@@ -10,7 +10,7 @@ import * as bcrypt from 'bcryptjs'
 
 // Seed must use the direct (non-pooled) connection — pgBouncer pooler times out on seed
 const prisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL } },
+  datasources: { db: { url: process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL } },
 })
 
 async function main() {
