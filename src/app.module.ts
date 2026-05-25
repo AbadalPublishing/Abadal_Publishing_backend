@@ -21,6 +21,7 @@ import { PaymentAccountsModule } from './modules/payment-accounts/payment-accoun
 import { RoyaltyPayoutsModule } from './modules/royalty-payouts/royalty-payouts.module'
 import { SettingsModule } from './modules/settings/settings.module'
 import { AnalyticsModule } from './modules/analytics/analytics.module'
+import { WhatsappOrdersModule } from './modules/whatsapp-orders/whatsapp-orders.module'
 import { AuditModule } from './modules/audit/audit.module'
 import { EmailModule } from './modules/email/email.module'
 import { KafkaModule } from './modules/kafka/kafka.module'
@@ -74,6 +75,7 @@ import { CommonModule } from './common/common.module'
     RoyaltyPayoutsModule,
     SettingsModule,
     AnalyticsModule,
+    WhatsappOrdersModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

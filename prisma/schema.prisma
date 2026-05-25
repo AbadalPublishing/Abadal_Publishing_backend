@@ -670,6 +670,38 @@ model SiteSettings {
   updatedAt           DateTime @updatedAt
 }
 
+// WhatsApp guest orders — self-contained, no FKs.
+// Saved when a customer completes the in-app journey and clicks "Send to WhatsApp".
+model WhatsappOrder {
+  id          String   @id @default(uuid())
+  refCode     String   @unique  // e.g. ABDL-7K2X
+  // Customer
+  name        String
+  phone       String
+  email       String?
+  // Address
+  street      String
+  city        String
+  country     String   @default("Pakistan")
+  notes       String?
+  // Book / pricing snapshot (paperback-only for now)
+  productId   String?
+  bookTitle   String
+  edition     String   @default("Paperback")
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  subtotal    Decimal  @db.Decimal(12, 2)
+  shipping    Decimal  @default(0) @db.Decimal(10, 2)
+  total       Decimal  @db.Decimal(12, 2)
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([refCode])
+}
+
 model AuditLog {
   id          String   @id @default(uuid())
   adminId     String
