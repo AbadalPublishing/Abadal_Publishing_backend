@@ -28,6 +28,21 @@ export class WhatsappOrdersController {
     };
   }
 
+  // ── Public customer-facing tracking ──────────────────────────────
+  @Public()
+  @Get('track/:refCode')
+  track(@Param('refCode') refCode: string) {
+    return this.waOrders.trackByRef(refCode);
+  }
+
+  @Public()
+  @Post('track/:refCode/confirm-delivery')
+  @WriteRateLimit()
+  confirmDelivery(@Param('refCode') refCode: string) {
+    return this.waOrders.confirmDeliveryByCustomer(refCode);
+  }
+
+  // ── Admin ────────────────────────────────────────────────────────
   @Get() @Roles('SUPER_ADMIN')
   list(
     @Query('from') from?: string,
@@ -49,7 +64,7 @@ export class WhatsappOrdersController {
   @Patch(':id') @Roles('SUPER_ADMIN')
   update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { status?: string; quantity?: number; notes?: string },
+    @Body() body: { status?: string; quantity?: number; notes?: string; paymentAccount?: string },
   ) {
     return this.waOrders.update(id, body);
   }
@@ -69,49 +84,54 @@ export class WhatsappOrdersController {
     const sheet = wb.addWorksheet('WhatsApp Orders');
 
     sheet.columns = [
-      { header: 'Order Ref',  key: 'refCode',   width: 16 },
-      { header: 'Date',       key: 'date',      width: 12 },
-      { header: 'Time',       key: 'time',      width: 10 },
-      { header: 'Name',       key: 'name',      width: 22 },
-      { header: 'Phone',      key: 'phone',     width: 16 },
-      { header: 'Email',      key: 'email',     width: 26 },
-      { header: 'Street',     key: 'street',    width: 32 },
-      { header: 'City',       key: 'city',      width: 14 },
-      { header: 'Country',    key: 'country',   width: 12 },
-      { header: 'Book',       key: 'book',      width: 36 },
-      { header: 'Qty',        key: 'qty',       width: 6 },
-      { header: 'Unit Price', key: 'unit',      width: 12 },
-      { header: 'Subtotal',   key: 'subtotal',  width: 12 },
-      { header: 'Shipping',   key: 'shipping',  width: 12 },
-      { header: 'Total',      key: 'total',     width: 12 },
-      { header: 'Status',     key: 'status',    width: 12 },
-      { header: 'Notes',      key: 'notes',     width: 36 },
+      { header: 'Order Ref',     key: 'refCode',  width: 16 },
+      { header: 'Date',          key: 'date',     width: 12 },
+      { header: 'Time',          key: 'time',     width: 10 },
+      { header: 'Name',          key: 'name',     width: 22 },
+      { header: 'Phone',         key: 'phone',    width: 16 },
+      { header: 'Email',         key: 'email',    width: 26 },
+      { header: 'Street',        key: 'street',   width: 32 },
+      { header: 'City',          key: 'city',     width: 14 },
+      { header: 'Country',       key: 'country',  width: 12 },
+      { header: 'Book',          key: 'book',     width: 36 },
+      { header: 'Qty',           key: 'qty',      width: 6 },
+      { header: 'Unit Price',    key: 'unit',     width: 12 },
+      { header: 'Subtotal',      key: 'subtotal', width: 12 },
+      { header: 'Shipping',      key: 'shipping', width: 12 },
+      { header: 'Total',         key: 'total',    width: 12 },
+      { header: 'Payment Acct',  key: 'pay',      width: 28 },
+      { header: 'Status',        key: 'status',   width: 12 },
+      { header: 'Approved',      key: 'approved', width: 18 },
+      { header: 'Delivered',     key: 'delivered',width: 18 },
+      { header: 'Notes',         key: 'notes',    width: 36 },
     ];
 
     sheet.getRow(1).font = { bold: true };
     sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E2D5' } } as any;
     sheet.getRow(1).alignment = { vertical: 'middle' };
 
-    for (const r of rows) {
+    const fmt = (d: any) => {
+      if (!d) return '';
+      const x = new Date(d);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())} ${pad(x.getHours())}:${pad(x.getMinutes())}`;
+    };
+
+    for (const r of rows as any[]) {
       const d = new Date(r.createdAt);
       const pad = (n: number) => String(n).padStart(2, '0');
       sheet.addRow({
         refCode: r.refCode,
         date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
         time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-        name: r.name,
-        phone: r.phone,
-        email: r.email,
-        street: r.street,
-        city: r.city,
-        country: r.country,
-        book: r.bookTitle,
-        qty: r.quantity,
-        unit: r.unitPrice,
-        subtotal: r.subtotal,
-        shipping: r.shipping,
-        total: r.total,
+        name: r.name, phone: r.phone, email: r.email,
+        street: r.street, city: r.city, country: r.country,
+        book: r.bookTitle, qty: r.quantity,
+        unit: r.unitPrice, subtotal: r.subtotal, shipping: r.shipping, total: r.total,
+        pay: r.paymentAccount,
         status: r.status,
+        approved: fmt(r.approvedAt),
+        delivered: fmt(r.deliveredAt),
         notes: r.notes,
       });
     }
@@ -130,7 +150,7 @@ export class WhatsappOrdersController {
         subtotal: { formula: `SUM(M2:M${lastDataRow})` } as any,
         shipping: { formula: `SUM(N2:N${lastDataRow})` } as any,
         total: { formula: `SUM(O2:O${lastDataRow})` } as any,
-        status: '', notes: '',
+        pay: '', status: '', approved: '', delivered: '', notes: '',
       });
       totalsRow.font = { bold: true };
       totalsRow.eachCell((cell) => { cell.border = { top: { style: 'thin' } }; });

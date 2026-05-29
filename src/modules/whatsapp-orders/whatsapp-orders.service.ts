@@ -71,7 +71,6 @@ export class WhatsappOrdersService {
     });
   }
 
-  /** Admin: per-book quantity totals (across all WhatsApp orders, respecting filters) */
   async bookTotals(params: { from?: string; to?: string; status?: string }) {
     const orders = await this.list(params);
     const map = new Map<string, { bookTitle: string; quantity: number; orders: number; revenue: number }>();
@@ -86,14 +85,28 @@ export class WhatsappOrdersService {
     return Array.from(map.values()).sort((a, b) => b.quantity - a.quantity);
   }
 
-  async update(id: string, data: { status?: string; quantity?: number; notes?: string }) {
+  async update(id: string, data: { status?: string; quantity?: number; notes?: string; paymentAccount?: string }) {
     const order = await (this.prisma as any).whatsappOrder.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
 
     const updateData: any = {};
     if (data.status) {
       if (!VALID_STATUSES.includes(data.status)) throw new BadRequestException('Invalid status');
+      // Require payment account when moving to CONFIRMED for the first time
+      if (data.status === 'CONFIRMED' && !order.approvedAt) {
+        const acc = (data.paymentAccount || order.paymentAccount || '').trim();
+        if (!acc) throw new BadRequestException('Payment account is required to approve this order');
+        updateData.paymentAccount = acc;
+        updateData.paymentReceivedAt = new Date();
+        updateData.approvedAt = new Date();
+      }
+      if (data.status === 'DELIVERED' && !order.deliveredAt) {
+        updateData.deliveredAt = new Date();
+      }
       updateData.status = data.status;
+    }
+    if (data.paymentAccount !== undefined && !updateData.paymentAccount) {
+      updateData.paymentAccount = data.paymentAccount.trim();
     }
     if (typeof data.quantity === 'number' && data.quantity >= 1) {
       const newQty = Math.floor(data.quantity);
@@ -108,6 +121,49 @@ export class WhatsappOrdersService {
     if (data.notes !== undefined) updateData.notes = data.notes;
 
     return (this.prisma as any).whatsappOrder.update({ where: { id }, data: updateData });
+  }
+
+  /** Public: get a sanitized view of an order by refCode (for the QR tracking page) */
+  async trackByRef(refCode: string) {
+    const order = await (this.prisma as any).whatsappOrder.findUnique({ where: { refCode: refCode.toUpperCase() } });
+    if (!order) throw new NotFoundException('Order not found');
+    return {
+      refCode: order.refCode,
+      status: order.status,
+      bookTitle: order.bookTitle,
+      edition: order.edition,
+      quantity: order.quantity,
+      total: Number(order.total),
+      name: order.name,
+      city: order.city,
+      createdAt: order.createdAt,
+      approvedAt: order.approvedAt,
+      deliveredAt: order.deliveredAt,
+      deliveryConfirmedAt: order.deliveryConfirmedAt,
+      canConfirmDelivery: ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(order.status) && !order.deliveryConfirmedAt,
+    };
+  }
+
+  /** Public: customer scans QR + taps confirm. */
+  async confirmDeliveryByCustomer(refCode: string) {
+    const order = await (this.prisma as any).whatsappOrder.findUnique({ where: { refCode: refCode.toUpperCase() } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.deliveryConfirmedAt) {
+      return { ok: true, status: order.status, message: 'Delivery already confirmed' };
+    }
+    if (!['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'].includes(order.status)) {
+      throw new BadRequestException('Order cannot be marked delivered in its current state');
+    }
+    const now = new Date();
+    const updated = await (this.prisma as any).whatsappOrder.update({
+      where: { id: order.id },
+      data: {
+        status: 'DELIVERED',
+        deliveredAt: order.deliveredAt || now,
+        deliveryConfirmedAt: now,
+      },
+    });
+    return { ok: true, status: updated.status, deliveryConfirmedAt: updated.deliveryConfirmedAt };
   }
 
   async exportRows(params: { from?: string; to?: string; status?: string }) {
@@ -127,8 +183,11 @@ export class WhatsappOrdersService {
       subtotal: Number(o.subtotal),
       shipping: Number(o.shipping),
       total: Number(o.total),
+      paymentAccount: o.paymentAccount || '',
       notes: o.notes || '',
       status: o.status,
+      approvedAt: o.approvedAt,
+      deliveredAt: o.deliveredAt,
     }));
   }
 }

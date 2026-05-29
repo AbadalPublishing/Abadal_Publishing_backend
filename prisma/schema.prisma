@@ -694,6 +694,13 @@ model WhatsappOrder {
   shipping    Decimal  @default(0) @db.Decimal(10, 2)
   total       Decimal  @db.Decimal(12, 2)
   status      OrderStatus @default(PENDING)
+  // Approval / payment confirmation (set when admin approves)
+  paymentAccount      String?   // free text — e.g. "JazzCash 03001234567"
+  paymentReceivedAt   DateTime?
+  approvedAt          DateTime?
+  // Delivery confirmation (set when customer scans QR + confirms)
+  deliveredAt         DateTime?
+  deliveryConfirmedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
