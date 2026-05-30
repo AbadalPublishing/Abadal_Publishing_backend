@@ -135,6 +135,23 @@ export class AuthService {
     if (!user) throw new NotFoundException('User not found');
     if (user.author) throw new BadRequestException('You already have an author profile');
 
+    // SECURITY: require verified email before allowing role upgrade to AUTHOR.
+    // If not verified, mint a new verification token and email them — return a clear error.
+    if (!user.emailVerified) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { emailVerificationToken: token, emailVerificationExpiresAt: expiresAt } as any,
+      });
+      const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const verifyUrl = `${baseUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(token)}`;
+      try { await this.email.sendAuthorWelcome(user, verifyUrl); } catch { /* ignore — error still surfaces */ }
+      throw new BadRequestException(
+        'Please verify your email first. We just sent a verification link to ' + user.email + '.',
+      );
+    }
+
     // Generate unique slug from penName
     let baseSlug = slugify(dto.penName) || 'author';
     let slug = baseSlug;
