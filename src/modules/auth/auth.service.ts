@@ -23,6 +23,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const exists = await this.prisma.user.findFirst({ where: { email: dto.email, deletedAt: null } });
     if (exists) throw new BadRequestException('Email already registered');
+    await this.releaseSoftDeletedEmail(dto.email);
     const hash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
@@ -42,6 +43,7 @@ export class AuthService {
   async registerAuthor(dto: AuthorRegisterDto) {
     const exists = await this.prisma.user.findFirst({ where: { email: dto.email, deletedAt: null } });
     if (exists) throw new BadRequestException('Email already registered');
+    await this.releaseSoftDeletedEmail(dto.email);
 
     // Generate unique slug from penName
     let baseSlug = slugify(dto.penName) || 'author';
@@ -275,5 +277,18 @@ export class AuthService {
       include: { author: true },
     });
     return this.sanitize(user);
+  }
+
+  /** If a soft-deleted user holds this email, mangle theirs to free the @unique slot. */
+  private async releaseSoftDeletedEmail(email: string) {
+    const ghost = await this.prisma.user.findFirst({
+      where: { email, deletedAt: { not: null } },
+    });
+    if (ghost) {
+      await this.prisma.user.update({
+        where: { id: ghost.id },
+        data: { email: `deleted_${Date.now()}_${ghost.email}` },
+      });
+    }
   }
 }
