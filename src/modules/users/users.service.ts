@@ -51,8 +51,15 @@ export class UsersService {
   }
 
   async softDelete(id: string) {
-    await this.get(id);
-    await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
+    const user = await this.get(id);
+    // Free the @unique email slot so the address can be re-registered later.
+    // Original email is preserved inside the mangled string for audit.
+    const stamp = Date.now();
+    const releasedEmail = `deleted_${stamp}_${user.email}`;
+    await this.prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false, email: releasedEmail },
+    });
     return { success: true };
   }
 }

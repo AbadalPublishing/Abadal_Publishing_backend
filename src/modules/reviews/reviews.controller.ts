@@ -17,6 +17,11 @@ export class ReviewsController {
     return this.reviews.create(userId, dto);
   }
 
+  @Get('can-review')
+  canReview(@CurrentUser('id') userId: string, @Query('productId') productId?: string) {
+    return this.reviews.canReview(userId, productId || '');
+  }
+
   @Public() @Get()
   list(@Query('productId') productId?: string) { return this.reviews.list(productId); }
 

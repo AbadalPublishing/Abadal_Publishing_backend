@@ -6,18 +6,46 @@ import { CreateReviewDto } from './dto/review.dto';
 export class ReviewsService {
   constructor(private prisma: PrismaService) {}
 
+  /** Check whether a user is eligible to review a product — they must have a DELIVERED order. */
+  async canReview(userId: string, productId: string) {
+    if (!userId || !productId) return { eligible: false };
+    const regular = await this.prisma.orderItem.findFirst({
+      where: { productId, order: { userId, status: 'DELIVERED' } },
+      select: { orderId: true },
+    });
+    if (regular) return { eligible: true, orderId: regular.orderId, source: 'web' as const };
+    const wa = await (this.prisma as any).whatsappOrder.findFirst({
+      where: { productId, userId, status: 'DELIVERED' },
+      select: { id: true },
+    });
+    if (wa) return { eligible: true, source: 'whatsapp' as const };
+    return { eligible: false };
+  }
+
   async create(userId: string, dto: CreateReviewDto) {
-    const purchased = await this.prisma.orderItem.findFirst({
+    // Accept either a regular Order (DELIVERED) OR a WhatsappOrder (DELIVERED) for this product.
+    const regular = await this.prisma.orderItem.findFirst({
       where: { productId: dto.productId, order: { userId, status: 'DELIVERED' } },
       select: { orderId: true },
     });
-    if (!purchased) throw new BadRequestException('You must purchase and receive this product to review');
+    let orderId: string | null = regular?.orderId || null;
+    if (!orderId) {
+      const wa = await (this.prisma as any).whatsappOrder.findFirst({
+        where: { productId: dto.productId, userId, status: 'DELIVERED' },
+        select: { id: true },
+      });
+      if (!wa) {
+        throw new BadRequestException('You can only review books you have purchased and received');
+      }
+      // WhatsApp orders don't have an OrderItem.orderId — leave orderId null for them.
+      // The Review schema has orderId as optional in this fallback case.
+    }
     return this.prisma.review.upsert({
       where: { userId_productId: { userId, productId: dto.productId } },
       create: {
-        userId, productId: dto.productId, orderId: purchased.orderId,
+        userId, productId: dto.productId, orderId: orderId || undefined,
         rating: dto.rating, title: dto.title, body: dto.body, status: 'PENDING',
-      },
+      } as any,
       update: {
         rating: dto.rating, title: dto.title, body: dto.body, status: 'PENDING',
       },

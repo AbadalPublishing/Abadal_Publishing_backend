@@ -21,7 +21,7 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const exists = await this.prisma.user.findFirst({ where: { email: dto.email, deletedAt: null } });
     if (exists) throw new BadRequestException('Email already registered');
     const hash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
@@ -40,7 +40,7 @@ export class AuthService {
   }
 
   async registerAuthor(dto: AuthorRegisterDto) {
-    const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const exists = await this.prisma.user.findFirst({ where: { email: dto.email, deletedAt: null } });
     if (exists) throw new BadRequestException('Email already registered');
 
     // Generate unique slug from penName
