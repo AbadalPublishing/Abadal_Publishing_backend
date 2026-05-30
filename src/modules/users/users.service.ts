@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheHelper } from '../../common/services/cache.helper';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 const SAFE_SELECT = {
@@ -11,7 +12,7 @@ const SAFE_SELECT = {
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private cache: CacheHelper) {}
 
   async list(query: { role?: string; search?: string; page?: string; limit?: string }) {
     const page = Math.max(1, parseInt(query.page || '1'));
@@ -60,6 +61,8 @@ export class UsersService {
       where: { id },
       data: { deletedAt: new Date(), isActive: false, email: releasedEmail },
     });
+    // Bust caches so a deleted author disappears from the public list immediately.
+    try { await this.cache.del('authors:list:public'); } catch { /* ignore */ }
     return { success: true };
   }
 }

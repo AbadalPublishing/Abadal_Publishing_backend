@@ -52,8 +52,13 @@ export class AuthorsService {
 
   async listPublic() {
     // Cached 5 min — authors page + homepage spotlight
-    return this.cache.wrap('authors:list:public', 5 * 60_000, async () => {
+    return this.cache.wrap('authors:list:public', 60_000, async () => {
       const authors = await this.prisma.author.findMany({
+        // Only show verified authors whose underlying user is active and not soft-deleted
+        where: {
+          isVerified: true,
+          user: { is: { deletedAt: null, isActive: true } },
+        },
         select: {
           id: true, slug: true, penName: true, photo: true, bio: true,
           nationality: true, languages: true, isVerified: true,
