@@ -152,6 +152,8 @@ model User {
   role                 Role      @default(CUSTOMER)
   isActive             Boolean   @default(true)
   emailVerified        Boolean   @default(false)
+  emailVerificationToken      String?   @unique
+  emailVerificationExpiresAt  DateTime?
   phoneVerified        Boolean   @default(false)
   totalLifetimeSpend   Decimal   @default(0) @db.Decimal(12, 2)
   lastLoginAt          DateTime?

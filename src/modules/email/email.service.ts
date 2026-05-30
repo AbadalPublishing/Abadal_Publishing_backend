@@ -89,4 +89,52 @@ export class EmailService {
       html, userId: product.author?.userId, type: 'SUBMISSION_REJECTED',
     });
   }
+
+  async sendAuthorWelcome(user: any, verifyUrl: string) {
+    const firstName = user?.firstName || 'Author';
+    const html = `
+<!doctype html>
+<html><body style="margin:0;padding:0;background:#f5f3ee;font-family:Helvetica,Arial,sans-serif;color:#222">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ee;padding:32px 0">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e7e2d5">
+        <tr><td style="padding:28px 36px 18px;border-bottom:1px solid #e7e2d5">
+          <div style="font-family:Georgia,serif;font-size:22px;letter-spacing:.04em;color:#111">ABADAL <em style="color:#888;font-style:italic">Publishing</em></div>
+        </td></tr>
+        <tr><td style="padding:28px 36px 8px">
+          <h1 style="margin:0 0 14px;font-family:Georgia,serif;font-size:24px;font-weight:400;color:#111">Welcome, ${firstName}.</h1>
+          <p style="margin:0 0 14px;line-height:1.6;font-size:15px;color:#333">
+            Thank you for applying to publish with Abadal. Your author account has been created.
+          </p>
+          <p style="margin:0 0 22px;line-height:1.6;font-size:15px;color:#333">
+            To activate the account and start submitting manuscripts, please confirm your email below.
+          </p>
+          <p style="margin:0 0 28px;text-align:center">
+            <a href="${verifyUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 28px;font-size:13px;letter-spacing:.18em;text-transform:uppercase">Confirm Email</a>
+          </p>
+          <p style="margin:0 0 8px;font-size:12px;color:#888;line-height:1.5">
+            If the button does not work, paste this link into your browser:
+          </p>
+          <p style="margin:0 0 24px;font-size:12px;color:#444;word-break:break-all">
+            ${verifyUrl}
+          </p>
+          <p style="margin:0 0 6px;font-size:12px;color:#888">This link expires in 24 hours.</p>
+        </td></tr>
+        <tr><td style="padding:18px 36px 28px;border-top:1px solid #e7e2d5;font-size:12px;color:#888;line-height:1.5">
+          <em>Abadal Publishing</em> · Peshawar, Pakistan<br/>
+          If you did not apply for an author account, you can safely ignore this email.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+    await this.send({
+      to: user.email,
+      subject: 'Confirm your Abadal Publishing author account',
+      html,
+      userId: user.id,
+      type: 'AUTHOR_WELCOME',
+    });
+  }
+
 }

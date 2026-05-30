@@ -1,12 +1,17 @@
-import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
+import { AuthorRegisterDto } from './dto/author-register.dto';
+import { slugify } from '../../common/utils/slug';
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService, private jwt: JwtService) {}
+  constructor(private prisma: PrismaService, private jwt: JwtService, private email: EmailService, private config: ConfigService) {}
 
   private sanitize(user: any) {
     if (!user) return user;
@@ -31,6 +36,97 @@ export class AuthService {
       },
     });
     return this.issueToken(user);
+  }
+
+  async registerAuthor(dto: AuthorRegisterDto) {
+    const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (exists) throw new BadRequestException('Email already registered');
+
+    // Generate unique slug from penName
+    let baseSlug = slugify(dto.penName) || 'author';
+    let slug = baseSlug;
+    for (let i = 1; i < 25; i++) {
+      const clash = await this.prisma.author.findUnique({ where: { slug } });
+      if (!clash) break;
+      slug = `${baseSlug}-${i + 1}`;
+    }
+
+    const hash = await bcrypt.hash(dto.password, 10);
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          password: hash,
+          phone: dto.phone,
+          role: 'AUTHOR',
+          isActive: false,           // inactive until email verified
+          emailVerified: false,
+          emailVerificationToken: token,
+          emailVerificationExpiresAt: expiresAt,
+        } as any,
+      });
+      await tx.author.create({
+        data: {
+          userId: user.id,
+          slug,
+          penName: dto.penName,
+          bio: dto.bio,
+          photo: dto.photo,
+          website: dto.website,
+          nationality: dto.nationality,
+          languages: dto.languages,
+          socialLinks: dto.socialLinks as any,
+          isVerified: false,
+        },
+      });
+      return user;
+    });
+
+    // Build verify URL — frontend will route /verify-email and POST the token
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const verifyUrl = `${baseUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(token)}`;
+    await this.email.sendAuthorWelcome(created, verifyUrl);
+
+    return {
+      success: true,
+      message: 'Check your email for a verification link to activate your author account.',
+      email: created.email,
+    };
+  }
+
+  async verifyEmail(token: string) {
+    if (!token) throw new BadRequestException('Verification token required');
+    const user = await this.prisma.user.findFirst({
+      where: { emailVerificationToken: token } as any,
+    });
+    if (!user) throw new NotFoundException('Invalid or already-used verification link');
+    const uAny = user as any;
+    if (uAny.emailVerificationExpiresAt && new Date(uAny.emailVerificationExpiresAt) < new Date()) {
+      throw new BadRequestException('Verification link has expired');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          isActive: true,
+          emailVerified: true,
+          emailVerificationToken: null,
+          emailVerificationExpiresAt: null,
+        } as any,
+      });
+      // Auto-approve author if there is one linked to this user
+      const author = await tx.author.findUnique({ where: { userId: user.id } });
+      if (author) {
+        await tx.author.update({ where: { id: author.id }, data: { isVerified: true } });
+      }
+    });
+    const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
+    return this.issueToken(fresh);
   }
 
   async validateUser(email: string, password: string) {

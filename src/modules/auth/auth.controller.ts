@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
+import { AuthorRegisterDto } from './dto/author-register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotDto } from './dto/forgot.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -27,6 +28,20 @@ export class AuthController {
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
+  }
+
+  @Public()
+  @AuthRateLimit()
+  @Post('author-register')
+  registerAuthor(@Body() dto: AuthorRegisterDto) {
+    return this.auth.registerAuthor(dto);
+  }
+
+  @Public()
+  @AuthRateLimit()
+  @Get('verify-email')
+  verifyEmail(@Query('token') token: string) {
+    return this.auth.verifyEmail(token);
   }
 
   @Public()
