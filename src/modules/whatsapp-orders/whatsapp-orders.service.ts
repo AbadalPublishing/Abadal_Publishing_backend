@@ -15,7 +15,7 @@ const VALID_STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVE
 export class WhatsappOrdersService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateWhatsappOrderDto) {
+  async create(dto: CreateWhatsappOrderDto, userId?: string) {
     const qty = dto.quantity;
     const unit = Number(dto.unitPrice);
     const subtotal = +(unit * qty).toFixed(2);
@@ -48,6 +48,7 @@ export class WhatsappOrdersService {
         subtotal,
         shipping,
         total,
+        userId: userId || null,
         paymentMethod: dto.paymentMethod,
         paymentReceiptUrl: dto.paymentReceiptUrl,
         // Auto-fill the admin's paymentAccount label so they don't have to type
@@ -70,11 +71,19 @@ export class WhatsappOrdersService {
       }
     }
     if (params.status && VALID_STATUSES.includes(params.status)) where.status = params.status;
-    return (this.prisma as any).whatsappOrder.findMany({
+    const rows = await (this.prisma as any).whatsappOrder.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: 1000,
     });
+    // Normalise Decimal fields to plain numbers so the frontend never sees NaN
+    return (rows as any[]).map(r => ({
+      ...r,
+      unitPrice: Number(r.unitPrice ?? 0),
+      subtotal:  Number(r.subtotal ?? 0),
+      shipping:  Number(r.shipping ?? 0),
+      total:     Number(r.total ?? 0),
+    }));
   }
 
   async bookTotals(params: { from?: string; to?: string; status?: string }) {
@@ -131,7 +140,23 @@ export class WhatsappOrdersService {
     return (this.prisma as any).whatsappOrder.update({ where: { id }, data: updateData });
   }
 
-  /** Public: get a sanitized view of an order by refCode (for the QR tracking page) */
+  /** Authed: list orders belonging to this user */
+  async mine(userId: string) {
+    const rows = await (this.prisma as any).whatsappOrder.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return (rows as any[]).map(r => ({
+      ...r,
+      unitPrice: Number(r.unitPrice ?? 0),
+      subtotal:  Number(r.subtotal ?? 0),
+      shipping:  Number(r.shipping ?? 0),
+      total:     Number(r.total ?? 0),
+    }));
+  }
+
+    /** Public: get a sanitized view of an order by refCode (for the QR tracking page) */
   async trackByRef(refCode: string) {
     const order = await (this.prisma as any).whatsappOrder.findUnique({ where: { refCode: refCode.toUpperCase() } });
     if (!order) throw new NotFoundException('Order not found');

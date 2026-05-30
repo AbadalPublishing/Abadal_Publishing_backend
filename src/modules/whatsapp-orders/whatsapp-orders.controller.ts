@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import type { Request, Response } from 'express';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { WhatsappOrdersService } from './whatsapp-orders.service';
 import { CreateWhatsappOrderDto } from './dto/create-whatsapp-order.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -11,13 +13,23 @@ import { WriteRateLimit } from '../../common/decorators/throttle-auth.decorator'
 @Controller('whatsapp-orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WhatsappOrdersController {
-  constructor(private waOrders: WhatsappOrdersService) {}
+  constructor(private waOrders: WhatsappOrdersService, private jwt: JwtService) {}
 
   @Public()
   @Post()
   @WriteRateLimit()
-  async create(@Body() dto: CreateWhatsappOrderDto) {
-    const order = await this.waOrders.create(dto);
+  async create(@Body() dto: CreateWhatsappOrderDto, @Req() req: Request) {
+    // If the customer is logged in, capture their userId so the order shows
+    // up in their /account/orders. Anonymous orders still work.
+    let userId: string | undefined;
+    const authHeader = (req.headers?.authorization || '') as string;
+    if (authHeader.startsWith('Bearer ')) {
+      try {
+        const payload: any = this.jwt.verify(authHeader.slice(7));
+        userId = payload?.sub;
+      } catch { /* invalid/expired token — fall through as anonymous */ }
+    }
+    const order = await this.waOrders.create(dto, userId);
     return {
       id: order.id,
       refCode: order.refCode,
@@ -40,6 +52,13 @@ export class WhatsappOrdersController {
   @WriteRateLimit()
   confirmDelivery(@Param('refCode') refCode: string) {
     return this.waOrders.confirmDeliveryByCustomer(refCode);
+  }
+
+  // ── Authenticated customer ───────────────────────────────────────
+  @UseGuards(JwtAuthGuard)
+  @Get('mine')
+  mine(@CurrentUser('id') userId: string) {
+    return this.waOrders.mine(userId);
   }
 
   // ── Admin ────────────────────────────────────────────────────────

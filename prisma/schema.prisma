@@ -672,11 +672,12 @@ model SiteSettings {
   updatedAt           DateTime @updatedAt
 }
 
-// WhatsApp guest orders — self-contained, no FKs.
-// Saved when a customer completes the in-app journey and clicks "Send to WhatsApp".
+// WhatsApp orders — created via the in-app journey, optionally linked to a logged-in user.
 model WhatsappOrder {
   id          String   @id @default(uuid())
   refCode     String   @unique  // e.g. ABDL-7K2X
+  // Optional: link to logged-in user so they can see this in /account/orders
+  userId      String?
   // Customer
   name        String
   phone       String
@@ -712,6 +713,7 @@ model WhatsappOrder {
   @@index([createdAt])
   @@index([status])
   @@index([refCode])
+  @@index([userId])
 }
 
 model AuditLog {
