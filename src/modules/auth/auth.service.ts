@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthorRegisterDto } from './dto/author-register.dto';
+import { UpgradeToAuthorDto } from './dto/upgrade-to-author.dto';
 import { slugify } from '../../common/utils/slug';
 
 @Injectable()
@@ -127,6 +128,46 @@ export class AuthService {
     });
     const fresh = await this.prisma.user.findUnique({ where: { id: user.id } });
     return this.issueToken(fresh);
+  }
+
+  async upgradeToAuthor(userId: string, dto: UpgradeToAuthorDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { author: true } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.author) throw new BadRequestException('You already have an author profile');
+
+    // Generate unique slug from penName
+    let baseSlug = slugify(dto.penName) || 'author';
+    let slug = baseSlug;
+    for (let i = 1; i < 25; i++) {
+      const clash = await this.prisma.author.findUnique({ where: { slug } });
+      if (!clash) break;
+      slug = `${baseSlug}-${i + 1}`;
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { role: 'AUTHOR' },
+      });
+      await tx.author.create({
+        data: {
+          userId,
+          slug,
+          penName: dto.penName,
+          bio: dto.bio,
+          photo: dto.photo,
+          website: dto.website,
+          nationality: dto.nationality,
+          languages: dto.languages,
+          socialLinks: dto.socialLinks as any,
+          // Auto-verify since their email is already verified as a customer
+          isVerified: user.emailVerified,
+        },
+      });
+      return updatedUser;
+    });
+
+    return this.issueToken(result);
   }
 
   async validateUser(email: string, password: string) {

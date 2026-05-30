@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/comm
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthorRegisterDto } from './dto/author-register.dto';
+import { UpgradeToAuthorDto } from './dto/upgrade-to-author.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotDto } from './dto/forgot.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -42,6 +43,12 @@ export class AuthController {
   @Get('verify-email')
   verifyEmail(@Query('token') token: string) {
     return this.auth.verifyEmail(token);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('upgrade-to-author')
+  upgradeToAuthor(@CurrentUser('id') userId: string, @Body() dto: UpgradeToAuthorDto) {
+    return this.auth.upgradeToAuthor(userId, dto);
   }
 
   @Public()

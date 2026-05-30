@@ -696,6 +696,9 @@ model WhatsappOrder {
   shipping    Decimal  @default(0) @db.Decimal(10, 2)
   total       Decimal  @db.Decimal(12, 2)
   status      OrderStatus @default(PENDING)
+  // Customer-provided payment proof (Step 4 of the order flow)
+  paymentMethod       String?   // "JAZZCASH" | "EASYPAISA"
+  paymentReceiptUrl   String?   // Cloudinary URL of screenshot
   // Approval / payment confirmation (set when admin approves)
   paymentAccount      String?   // free text — e.g. "JazzCash 03001234567"
   paymentReceivedAt   DateTime?

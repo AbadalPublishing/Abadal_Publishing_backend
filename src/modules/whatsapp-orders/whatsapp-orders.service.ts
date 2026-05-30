@@ -48,7 +48,13 @@ export class WhatsappOrdersService {
         subtotal,
         shipping,
         total,
-      },
+        paymentMethod: dto.paymentMethod,
+        paymentReceiptUrl: dto.paymentReceiptUrl,
+        // Auto-fill the admin's paymentAccount label so they don't have to type
+        paymentAccount: dto.paymentMethod === 'JAZZCASH'
+          ? 'JazzCash · 0336-3434629 · Syed Shamsul Arifeen'
+          : 'Easypaisa · 0303-9555966 · Syed Shamsul Arifeen',
+      } as any,
     });
   }
 
@@ -94,9 +100,11 @@ export class WhatsappOrdersService {
       if (!VALID_STATUSES.includes(data.status)) throw new BadRequestException('Invalid status');
       // Require payment account when moving to CONFIRMED for the first time
       if (data.status === 'CONFIRMED' && !order.approvedAt) {
+        // Customer-supplied paymentMethod auto-fills paymentAccount on create,
+        // so admin just confirms. Only require manual entry if it's somehow missing.
         const acc = (data.paymentAccount || order.paymentAccount || '').trim();
         if (!acc) throw new BadRequestException('Payment account is required to approve this order');
-        updateData.paymentAccount = acc;
+        if (data.paymentAccount !== undefined) updateData.paymentAccount = acc;
         updateData.paymentReceivedAt = new Date();
         updateData.approvedAt = new Date();
       }
@@ -139,6 +147,7 @@ export class WhatsappOrdersService {
       createdAt: order.createdAt,
       approvedAt: order.approvedAt,
       deliveredAt: order.deliveredAt,
+      paymentMethod: order.paymentMethod,
       deliveryConfirmedAt: order.deliveryConfirmedAt,
       canConfirmDelivery: ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(order.status) && !order.deliveryConfirmedAt,
     };
@@ -183,6 +192,8 @@ export class WhatsappOrdersService {
       subtotal: Number(o.subtotal),
       shipping: Number(o.shipping),
       total: Number(o.total),
+      paymentMethod: o.paymentMethod || '',
+      paymentReceiptUrl: o.paymentReceiptUrl || '',
       paymentAccount: o.paymentAccount || '',
       notes: o.notes || '',
       status: o.status,
