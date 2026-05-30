@@ -42,7 +42,7 @@ export class EmailService {
     try {
       if (this.transporter) {
         await this.transporter.sendMail({
-          from: this.config.get('SMTP_FROM', 'Abadal Publishing <no-reply@abadalpublishing.com>'),
+          from: this.config.get('SMTP_FROM', 'Abadal <no-reply@abadalpublishing.com>'),
           to: opts.to, subject: opts.subject, html: opts.html,
         });
       } else {
@@ -90,9 +90,9 @@ export class EmailService {
   async sendSubmissionApproved(product: any) {
     const email = product.author?.user?.email;
     if (!email) return;
-    const html = `<h2>Your book has been approved!</h2><p><strong>${product.title}</strong> is now live on the Abadal Publishing catalogue.</p>`;
+    const html = `<h2>Your book has been approved!</h2><p><strong>${product.title}</strong> is now live on the Abadal catalogue.</p>`;
     await this.send({
-      to: email, subject: `"${product.title}" is now live on Abadal Publishing`,
+      to: email, subject: `"${product.title}" is now live on Abadal`,
       html, userId: product.author?.userId, type: 'SUBMISSION_APPROVED',
     });
   }
@@ -116,7 +116,7 @@ export class EmailService {
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e7e2d5">
         <tr><td style="padding:28px 36px 18px;border-bottom:1px solid #e7e2d5">
-          <div style="font-family:Georgia,serif;font-size:22px;letter-spacing:.04em;color:#111">ABADAL <em style="color:#888;font-style:italic">Publishing</em></div>
+          <div style="font-family:Georgia,serif;font-size:22px;letter-spacing:.04em;color:#111">ABADAL</div>
         </td></tr>
         <tr><td style="padding:28px 36px 8px">
           <h1 style="margin:0 0 14px;font-family:Georgia,serif;font-size:24px;font-weight:400;color:#111">Welcome, ${firstName}.</h1>
@@ -138,7 +138,7 @@ export class EmailService {
           <p style="margin:0 0 6px;font-size:12px;color:#888">This link expires in 24 hours.</p>
         </td></tr>
         <tr><td style="padding:18px 36px 28px;border-top:1px solid #e7e2d5;font-size:12px;color:#888;line-height:1.5">
-          <em>Abadal Publishing</em> · Peshawar, Pakistan<br/>
+          <em>Abadal</em> · Peshawar, Pakistan<br/>
           If you did not apply for an author account, you can safely ignore this email.
         </td></tr>
       </table>
@@ -147,7 +147,7 @@ export class EmailService {
 </body></html>`;
     await this.send({
       to: user.email,
-      subject: 'Confirm your Abadal Publishing author account',
+      subject: 'Confirm your Abadal author account',
       html,
       userId: user.id,
       type: 'AUTHOR_WELCOME',

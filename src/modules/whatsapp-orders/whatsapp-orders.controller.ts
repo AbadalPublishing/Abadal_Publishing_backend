@@ -98,7 +98,7 @@ export class WhatsappOrdersController {
     const rows = await this.waOrders.exportRows({ from, to, status });
     const ExcelJS = await import('exceljs');
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'Abadal Publishing';
+    wb.creator = 'Abadal';
     wb.created = new Date();
     const sheet = wb.addWorksheet('WhatsApp Orders');
 

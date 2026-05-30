@@ -79,7 +79,7 @@ export class ShippingService {
       doc.on('data', (c: Buffer) => chunks.push(c));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
-      doc.fontSize(18).text('Abadal Publishing', { align: 'center' });
+      doc.fontSize(18).text('Abadal', { align: 'center' });
       doc.moveDown(0.5).fontSize(10).text('info@abadalpublishing.com', { align: 'center' });
       doc.moveDown().fontSize(14).text(`Order: ${order.orderNumber}`);
       doc.fontSize(10).text(`Tracking: ${order.shipment?.trackingNumber || '—'}`);
