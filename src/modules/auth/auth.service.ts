@@ -137,21 +137,27 @@ export class AuthService {
     if (!user) throw new NotFoundException('User not found');
     if (user.author) throw new BadRequestException('You already have an author profile');
 
-    // SECURITY: require verified email before allowing role upgrade to AUTHOR.
-    // If not verified, mint a new verification token and email them — return a clear error.
+    // If email isn't yet verified, we still allow the upgrade so the customer can
+    // start using the author dashboard right away — but we send a verification
+    // email and keep Author.isVerified = false so their public profile is hidden
+    // until they confirm. This avoids blocking users when SMTP isn't fully
+    // configured and matches the soft customer-onboarding flow.
     if (!user.emailVerified) {
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { emailVerificationToken: token, emailVerificationExpiresAt: expiresAt } as any,
-      });
-      const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
-      const verifyUrl = `${baseUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(token)}`;
-      try { await this.email.sendAuthorWelcome(user, verifyUrl); } catch { /* ignore — error still surfaces */ }
-      throw new BadRequestException(
-        'Please verify your email first. We just sent a verification link to ' + user.email + '.',
-      );
+      try {
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { emailVerificationToken: token, emailVerificationExpiresAt: expiresAt } as any,
+        });
+        const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+        const verifyUrl = `${baseUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(token)}`;
+        await this.email.sendAuthorWelcome(user, verifyUrl);
+      } catch (e) {
+        // Don't block — the upgrade still proceeds. Logs will show the SMTP error.
+        // eslint-disable-next-line no-console
+        console.warn('Author welcome email failed to send:', (e as any)?.message);
+      }
     }
 
     // Generate unique slug from penName
