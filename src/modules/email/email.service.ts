@@ -9,13 +9,30 @@ export class EmailService {
   private transporter: nodemailer.Transporter | null = null;
 
   constructor(private config: ConfigService, private prisma: PrismaService) {
-    const user = config.get('SMTP_USER');
-    const pass = config.get('SMTP_PASS');
+    const user = config.get<string>('SMTP_USER');
+    const pass = config.get<string>('SMTP_PASS');
+    const host = config.get<string>('SMTP_HOST');
+    const port = parseInt(config.get<string>('SMTP_PORT') || '465', 10);
     if (user && pass) {
-      this.transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-      });
+      if (host) {
+        // Generic SMTP — Resend, Brevo, Mailgun, custom server, etc.
+        this.transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: port === 465,
+          auth: { user, pass },
+        });
+        this.logger.log(`Email transport: SMTP ${host}:${port} as ${user}`);
+      } else {
+        // Back-compat: Gmail well-known service
+        this.transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user, pass },
+        });
+        this.logger.log(`Email transport: Gmail as ${user}`);
+      }
+    } else {
+      this.logger.warn('Email transport: NOT configured — set SMTP_USER + SMTP_PASS (and SMTP_HOST for non-Gmail)');
     }
   }
 
