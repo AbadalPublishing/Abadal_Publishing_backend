@@ -46,7 +46,8 @@ export class AnalyticsService {
     const days = this.rangeDays(range);
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const [orders, totalRevenue, uniqueSessionRows, newUsers, allEvents] = await Promise.all([
+    const [orders, totalRevenue, uniqueSessionRows, newUsers, allEvents,
+           customers, pendingWebOrders, pendingWaOrders, waRevenueAgg] = await Promise.all([
       this.prisma.order.count({ where: { createdAt: { gte: since }, deletedAt: null } }),
       this.prisma.order.aggregate({
         where: { createdAt: { gte: since }, deletedAt: null, status: { not: 'CANCELLED' } },
@@ -59,6 +60,16 @@ export class AnalyticsService {
       this.prisma.analyticsEvent.findMany({
         where: { createdAt: { gte: since } },
         select: { createdAt: true, eventType: true },
+      }),
+      // All-time customers (not deleted) — what the dashboard card actually wants
+      this.prisma.user.count({ where: { role: { in: ['CUSTOMER', 'AUTHOR'] }, deletedAt: null } }),
+      // Pending across both order types
+      this.prisma.order.count({ where: { status: 'PENDING', deletedAt: null } }),
+      (this.prisma as any).whatsappOrder.count({ where: { status: 'PENDING' } }),
+      // WhatsApp revenue (not cancelled) within the range, to add to totals.revenue
+      (this.prisma as any).whatsappOrder.aggregate({
+        where: { createdAt: { gte: since }, status: { not: 'CANCELLED' } },
+        _sum: { total: true },
       }),
     ]);
 
@@ -73,13 +84,16 @@ export class AnalyticsService {
       eventCounts[e.eventType] = (eventCounts[e.eventType] || 0) + 1;
     }
 
+    const waRevenue = Number(waRevenueAgg?._sum?.total || 0);
     return {
       totals: {
         orders,
-        revenue: Number(totalRevenue._sum.totalAmount || 0),
+        revenue: Number(totalRevenue._sum.totalAmount || 0) + waRevenue,
         visitors: eventCounts['PAGE_VIEW'] || 0,
         uniqueSessions: uniqueSessionRows.length,
         newUsers,
+        customers,
+        pending: pendingWebOrders + pendingWaOrders,
       },
       eventCounts,
       daily: Object.values(dailyMap).sort((a: any, b: any) => a.date.localeCompare(b.date)),
